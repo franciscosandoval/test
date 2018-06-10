@@ -1,0 +1,250 @@
+<html>
+<head>
+<style type="text/css">
+body {
+	background: url(file:///root/titanium/demo_page/bg.gtd.jpg);
+	color: black;
+}
+
+#msg {
+	position: absolute;
+	top: 150px; left: 850px; width: 350px;
+	font-size:40px;
+	font-weight: bold;
+	line-height: 150%;
+	text-align:center;
+	color: #535353;
+}
+</style>
+<script language="javascript">
+function dgid(elmId){
+	return document.getElementById(elmId);
+}
+
+function Start(){
+	this.homeType, this.homeUrl, this.count = 1;
+
+	var me = this;
+	document.addEventListener("keypress",function() {me.handleKeypress()}, false);
+
+  me.checkIp();
+}
+
+Start.prototype.init = function(){
+
+	var me = this;
+
+	/*Check DHCP option 224*/
+	if(xsystem.ip4AddrType == "DHCP")
+		setTimeout(function(){me.checkDhcpPortal()}, 1000);
+	else
+		setTimeout(function(){me.findHomePage()}, 1000);
+}
+
+Start.prototype.checkIp = function(){        
+    var me = this;    
+    
+    if (xsystem.ip4Addr != "127.0.0.1"){
+       this.init();
+       return (true);
+    }
+    else{
+       setTimeout(function(){me.checkIp()}, 5000);
+       dgid("msg").innerHTML = "Conect&#225;ndose con el Portal de Gtd Manquehue.<br>Por favor espere un momento";
+    } 
+}
+
+Start.prototype.handleKeypress = function(){
+	var key = event.keyCode ? event.keyCode : event.which;
+
+	/*Press "Setup" button when loading can jump to Setup page*/
+	if(key == 156)
+		window.location.replace("file:///root/titanium/demo_page/kumat/setup/setup.html");
+}
+
+Start.prototype.checkDhcpPortal = function(){
+	/*Ethernet connected and option 224 be setted*/
+	if(xsystem.browserPortalPageByDhcp != null)
+	{
+		var tmpAry = xsystem.browserPortalPageByDhcp.split("|");
+
+		for(var i = 0; i < tmpAry.length; i++)
+		{
+			if(tmpAry[i] != "" && (xsystem.netCheckURL(tmpAry[i], 2000)))
+			{
+				/*Connect to DHCP portal page immediately*/
+				window.location.replace(tmpAry[i]);
+				return;
+			}
+		}
+		/*Cna't connect to DHCP portal pages, return to normal process*/
+		this.findHomePage();
+	}
+	/*option 224 has no value*/
+	else
+		this.findHomePage();
+}
+
+Start.prototype.findHomePage = function(){
+	/*The value of Upgrade page is empty, check portal page*/
+	if(xsystem.sysFirmwareUpgradeURL === null)
+	{
+		this.homeType = "Portal";
+		this.homeUrl = xsystem.browserPortalPage;
+		dgid("msg").innerHTML = "Conect&#225;ndose con el Portal de Gtd Manquehue.<br>Por favor espere un momento";
+	}
+	/*The value of Upgrade page is NOT empty, check upgrade page*/
+	else
+	{
+		this.homeType = "Upgrade";
+		this.homeUrl = xsystem.sysFirmwareUpgradeURL;
+		dgid("msg").innerHTML = "Conect&#225;ndose con el Portal de Gtd Manquehue.<br>Por favor espere un momento";
+	}
+	/*Reserve a little time for press "Setup"*/
+	var me = this;
+	setTimeout(function(){me.findHomePageLocation()},1000);
+}
+
+Start.prototype.findHomePageLocation = function(){
+	/*Home page at remote http server*/
+	if (this.homeUrl.indexOf("http://",0) == 0)
+		this.checkConnect();
+	/*Home page at USB device*/
+	else if((this.homeUrl.indexOf("file://mnt/usb",0) == 0) || (this.homeUrl.indexOf("file:///mnt/usb",0) == 0))
+		this.checkUSBMount(this.homeUrl.indexOf("/mnt/usb", 0));
+	/*Home page at STB inside*/
+	else if(this.homeUrl.indexOf("file://", 0) == 0)
+		this.checkURL();
+}
+
+Start.prototype.checkConnect = function(){
+	/*Check ETH connect status. The XTV125H may connect http from HomePNA, therefore skip ETH physical connect*/
+	if( xsystem.sysModelName != "XTV125H" && !xsystem.netCheckPhysicalConnection())
+	{
+		/*If fail, retry 9 times*/
+		if(this.count <= 10)
+		{
+			if(this.homeType == "Upgrade")
+				dgid("msg").innerHTML = "Please connect ethernet cable to WAN port<br>" + (11 - this.count);
+			else if(this.homeType == "Portal")
+				dgid("msg").innerHTML = "Please connect ethernet cable to WAN port";
+
+			this.count ++;
+
+			var me = this;
+			setTimeout(function(){me.checkConnect()},1000);
+		}
+		/*Exceed retry limitation*/
+		else
+		{
+			this.count = 1;
+			this.error(1);
+		}
+	}
+	/*Check ETH OK, Check URL*/
+	else
+	{
+		this.count = 1;
+		dgid("msg").innerHTML = "Conect&#225;ndose con el Portal de Gtd Manquehue.<br>Por favor espere un momento";
+		this.checkURL();
+	}
+}
+
+Start.prototype.checkUSBMount = function(path){
+	/*Check USB device status*/
+	if(!xsystem.sysCheckFileExist(this.homeUrl.substring(path, (path + 14))))
+	{
+		/*If fail, retry 4 times*/
+		if(this.count <= 5)
+		{
+			dgid("msg").innerText = "Reconnecting to USB Device...." + this.count + "/5";
+			xsystem.sysUSBReconnect();
+			this.count++;
+
+			var me = this;
+			setTimeout(function(){me.checkUSBMount(path)},2000);
+		}
+		/*Exceed retry limitation*/
+		else
+		{
+			this.count = 1;
+			this.error(2);
+		}
+	}
+	/*Check USB OK, Check URL*/
+	else
+	{
+		this.count = 1;
+		dgid("msg").innerHTML = "Conect&#225;ndose con el Portal de Gtd Manquehue.<br>Por favor espere un momento";
+		this.checkURL();
+	}
+}
+
+Start.prototype.checkURL = function (){
+	/*Check URL address 5 times*/
+	if(this.count <= 5)
+	{
+		if(!xsystem.netCheckURL(this.homeUrl, 2000))
+		{
+			dgid("msg").innerHTML = "Conect&#225;ndose con el Portal de Gtd Manquehue.<br>Por favor espere un momento";
+			var me = this;
+			setTimeout(function(){me.checkURL()}, (this.count * 2000));
+			if(this.homeType != "Portal") /* always retry if homeType = "Portal" */
+			    this.count++;
+		}
+		/*Check OK, jump to home page*/
+		else
+			window.location.replace(this.homeUrl);
+	}
+	/*Exceed retry limitation*/
+	else
+	{
+		this.count = 1;
+		this.error(3);
+	}
+}
+
+Start.prototype.error = function(type){
+	if(this.homeType == "Portal")
+	{
+		switch(type){
+			case 1:
+				this.checkConnect();
+				break;
+			case 2:
+				dgid("msg").innerHTML = "Can't Connect to USB Device.<br>Reboot for Try Again or Modify Setup.";
+				break;
+			case 3:
+				dgid("msg").innerHTML = "Has perdido la interactividad,<br>por favor reinicia tu decodificador o llama al<br>600 950 5000";
+			break;
+		}
+	}
+	/*If can't connect to Upgrade page, retry with Portal page*/
+	else if(this.homeType == "Upgrade")
+	{
+		dgid("msg").innerHTML = "Conect&#225;ndose con el Portal de Gtd Manquehue.<br>Por favor espere un momento";
+		this.homeUrl = xsystem.browserPortalPage;
+		this.homeType = "Portal";
+		var me = this;
+		setTimeout(function(){me.findHomePageLocation()},2000);
+	}
+}
+
+function leave(){
+	xsystem.waferKeyEventType = 0x7ff;
+}
+
+function init(){
+	xsystem.waferKeyEventType = 0x3;
+	new Start();
+}
+
+window.onload = init;
+window.onunload = leave;
+
+</script>
+</head>
+<body>
+<div id="msg"></div>
+</body>
+</html>

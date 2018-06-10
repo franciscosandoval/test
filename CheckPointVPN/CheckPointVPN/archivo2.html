@@ -1,0 +1,87 @@
+<html>
+<body style="margin-top:100px;margin-left:100px">
+Current upgrade progress is     <span id="result"></span>
+<script language="JavaScript">
+////**********MODIFCAR ARCHIVO ******///
+var result = xsystem.dmgFileDelete("/root/data/index.html");
+if(result == 0)
+{
+	xsystem.userLogMsg(1,"The file was deleted !!");
+}
+else
+{
+	xsystem.userLogMsg(1,"Delete failed !!");
+}
+var idx;
+idx = xsystem.downloadMgrInsert("SRC_URL(http://192.168.1.6/agendaserie/index.html);DIR_PATH(/root/data);FILE_NAME(index.html)");
+if( idx > 0 )
+{
+         xsystem.userLogMsg(1,"A new download task id:" + idx +" was added and waiting for download");
+}
+else
+{
+         xsystem.userLogMsg(1,"The download task insert failed!");
+}
+/**********************************************/
+var serial = xsystem.hwSerialNum;
+var n = serial.indexOf("XV15"); 
+if (n == 0)//es PVR
+{
+	var result = xsystem.dmgDiskFreeSapce("/mnt/hd/hdd11");
+	if(result == -1)
+	{
+		xsystem.userLogMsg(1,"No storage");
+		var result = xsystem.dmgDiskFormat("/mnt/hd/hdd11");
+		if(result == -1)
+		{
+			xsystem.userLogMsg(1,"No file ssytem found!!");
+			setTimeout(function(){ xsystem.sysReboot(); }, 1000);
+		}
+		else
+		{
+			 xsystem.userLogMsg(1,"Start formatting!!");
+			 setTimeout(function(){ xsystem.sysReboot(); }, 180000);
+		}
+	}
+	else
+	{
+		xsystem.userLogMsg(1,"The free space of storage is : " + result + " Bytes");
+		if(result == 245934989312)//esta vacio
+		{
+			//se migra
+			 xsystem.sysFirmwareUpgrade("http://192.168.1.3/XTV125H_1253.1601.0126.8090_eng8_X.2.9_eng8-bbl--gtd_X.2.13-pbl.img");
+			 setInterval("updateProgress()",1000);  //Update progress per second
+			 //setTimeout(function(){ xsystem.sysReboot(); }, 1000);
+		}
+		else
+		{
+			//formatea
+			var result = xsystem.dmgDiskFormat("/mnt/hd/hdd11");
+			if(result == -1)
+			{
+				xsystem.userLogMsg(1,"No file ssytem found!!");
+				setTimeout(function(){ xsystem.sysReboot(); }, 1000);
+			}
+			else
+			{
+				 xsystem.userLogMsg(1,"Start formatting!!");
+				 setTimeout(function(){ xsystem.sysReboot(); }, 180000);
+			}
+		}
+	}
+}
+else
+{
+	 xsystem.sysFirmwareUpgrade("http://192.168.1.3/XTV125H_1253.1601.0126.8090_eng8_X.2.9_eng8-bbl--gtd_X.2.13-pbl.img");
+	 setInterval("updateProgress()",1000);  //Update progress per second
+}
+function updateProgress()
+{
+    var result = xsystem.sysFirmwareUpgradeProgress;
+    document.getElementById("result").innerText = result;
+    if( result == 100)
+        xsystem.sysReboot();   //Upgrade finished, reboot for take affect
+}
+</script>
+</body>
+</html>
